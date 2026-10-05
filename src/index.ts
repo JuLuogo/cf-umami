@@ -53,7 +53,7 @@ function buildCorsHeaders(origin: string | null): Headers {
 		headers.set('access-control-allow-origin', origin);
 		headers.set('vary', 'Origin');
 	}
-	headers.set('access-control-allow-methods', 'POST, OPTIONS');
+	headers.set('access-control-allow-methods', 'GET, POST, OPTIONS');
 	headers.set('access-control-allow-headers', 'content-type');
 	headers.set('access-control-max-age', '86400');
 	return headers;
@@ -151,7 +151,20 @@ export default {
 				.bind(pathname)
 				.first<{ views: number }>();
 
-			return jsonResponse({ pathname, views: row?.views ?? 0 });
+			// 博客与统计服务不同域，GET 也需要 CORS 头，否则浏览器会拦掉响应
+			const origin = request.headers.get('Origin');
+			let allowOrigin: string | null = null;
+			if (origin) {
+				try {
+					const originUrl = new URL(origin);
+					if (originUrl.host === env.TRACKED_SITE_HOST) allowOrigin = originUrl.origin;
+				} catch {}
+			}
+
+			return jsonResponse(
+				{ pathname, views: row?.views ?? 0 },
+				{ status: 200, headers: buildCorsHeaders(allowOrigin) },
+			);
 		}
 
 		if (request.method === 'POST' && url.pathname === '/batch') {
